@@ -1,0 +1,11 @@
+# Ignore everything by default so only the hosted page and basic docs go to the remote
+*
+
+# Keep the ignore file itself
+!.gitignore
+
+# Keep the hosted payment page
+!index.html
+
+# Keep a small README for repo context
+!README.md
