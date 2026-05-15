@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow">
   <title>Payment details</title>
   <style>
     :root {
@@ -92,7 +93,7 @@
     .details {
       display: grid;
       gap: 14px;
-      margin: 0 0 24px;
+      margin: 0;
     }
 
     .row {
@@ -131,8 +132,7 @@
       font-weight: 800;
     }
 
-    button,
-    .sms-link {
+    button {
       min-height: 44px;
       border: 0;
       border-radius: 999px;
@@ -141,35 +141,19 @@
       background: var(--accent);
       font: inherit;
       font-weight: 800;
-      text-decoration: none;
       cursor: pointer;
       transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
     }
 
-    button:hover,
-    .sms-link:hover {
+    button:hover {
       transform: translateY(-1px);
       background: var(--accent-strong);
       box-shadow: 0 10px 25px rgb(15 118 110 / 22%);
     }
 
-    button:focus-visible,
-    .sms-link:focus-visible {
+    button:focus-visible {
       outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent);
       outline-offset: 3px;
-    }
-
-    .actions {
-      display: grid;
-      gap: 12px;
-      margin-top: 8px;
-    }
-
-    .sms-link {
-      display: inline-grid;
-      place-items: center;
-      width: 100%;
-      text-align: center;
     }
 
     .note {
@@ -206,55 +190,23 @@
     <section class="card" aria-labelledby="page-title">
       <p class="eyebrow">Bank transfer details</p>
       <h1 id="page-title">Thanks for buying!</h1>
-      <p class="intro">Please use the details below for payment. Tap a button to copy each field, then include the reference so we can match your payment.</p>
+      <p class="intro">Copy the details below into your banking app. Include the reference so the payment can be matched.</p>
 
       <div class="details" id="details"></div>
 
-      <div class="actions">
-        <a class="sms-link" id="smsLink" href="#">Text “I’ve paid”</a>
-      </div>
-
-      <p class="note">No card details are collected on this page. If a copy button does not work on your phone, long-press the value and copy it manually.</p>
+      <p class="note">No card details are collected on this page. If copy does not work on your phone, long-press the value instead.</p>
     </section>
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script>
-    const defaultPaymentDetails = {
-      accountName: "YOUR ACCOUNT NAME",
-      accountNumber: "12-3456-7890123-00",
-      reference: "GARAGE SALE",
-      amount: "",
-      smsNumber: ""
-    };
-
     const labels = {
       accountName: "Account name",
       accountNumber: "Account number",
       reference: "Reference",
       amount: "Amount"
     };
-
-    const queryAliases = {
-      accountName: ["name", "accountName"],
-      accountNumber: ["account", "accountNumber"],
-      reference: ["ref", "reference"],
-      amount: ["amount"],
-      smsNumber: ["sms", "smsNumber", "phone"]
-    };
-
-    function readDetails() {
-      const params = new URLSearchParams(window.location.search);
-      const details = { ...defaultPaymentDetails };
-
-      for (const [key, aliases] of Object.entries(queryAliases)) {
-        const match = aliases.find((alias) => params.has(alias));
-        if (match) details[key] = params.get(match).trim();
-      }
-
-      return details;
-    }
 
     async function copyText(text, label) {
       try {
@@ -308,23 +260,24 @@
       return row;
     }
 
-    function render() {
-      const details = readDetails();
-      const detailsContainer = document.getElementById("details");
+    async function render() {
+      const response = await fetch("./payment-details.json", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Could not load payment details: ${response.status}`);
+      }
+
+      const details = await response.json();
       const rows = ["accountName", "accountNumber", "reference", "amount"]
-        .filter((key) => details[key])
-        .map((key) => makeRow(key, details[key]));
+        .filter((key) => String(details[key] ?? "").trim())
+        .map((key) => makeRow(key, String(details[key]).trim()));
 
-      detailsContainer.replaceChildren(...rows);
-
-      const smsNumber = details.smsNumber.replace(/\s+/g, "");
-      const smsBody = `I've paid${details.amount ? ` ${details.amount}` : ""}. Reference: ${details.reference}`;
-      const smsLink = document.getElementById("smsLink");
-      smsLink.href = `sms:${smsNumber}?&body=${encodeURIComponent(smsBody)}`;
-      smsLink.hidden = !smsNumber;
+      document.getElementById("details").replaceChildren(...rows);
     }
 
-    render();
+    render().catch((error) => {
+      document.getElementById("details").textContent = "Payment details are not available right now.";
+      showToast(error.message);
+    });
   </script>
 </body>
 </html>
