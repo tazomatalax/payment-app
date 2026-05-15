@@ -6,7 +6,8 @@ import json
 from html import escape
 from pathlib import Path
 
-from qr_svg import make_svg
+import qrcode
+from qrcode.image.svg import SvgPathImage
 
 
 LABELS = {
@@ -68,6 +69,126 @@ def render_plain_text(details: dict[str, str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_print_sign(page_url: str) -> str:
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Payment QR</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+
+    * {{ box-sizing: border-box; }}
+
+    body {{
+      margin: 0;
+      background: #fff;
+      color: #111827;
+    }}
+
+    main {{
+      width: min(100%, 816px);
+      min-height: 100vh;
+      margin: 0 auto;
+      display: grid;
+      place-items: center;
+      padding: 32px;
+    }}
+
+    .sign {{
+      width: 100%;
+      max-width: 720px;
+      padding: 40px;
+      border: 3px solid #111827;
+      border-radius: 24px;
+      text-align: center;
+    }}
+
+    h1 {{
+      margin: 0 0 12px;
+      font-size: 3rem;
+      line-height: 1;
+      letter-spacing: -0.05em;
+    }}
+
+    p {{
+      margin: 0;
+      font-size: 1.4rem;
+      font-weight: 700;
+    }}
+
+    img {{
+      display: block;
+      width: min(100%, 420px);
+      margin: 28px auto;
+    }}
+
+    .small {{
+      margin-top: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: #4b5563;
+      overflow-wrap: anywhere;
+    }}
+
+    @media print {{
+      main {{
+        width: auto;
+        min-height: auto;
+        padding: 0;
+      }}
+
+      .sign {{
+        max-width: none;
+        border-width: 2px;
+        border-radius: 0;
+        break-inside: avoid;
+      }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <section class="sign">
+      <h1>Pay Here</h1>
+      <p>Scan. Copy. Pay.</p>
+      <img src="payment-page-qr.png" alt="Payment QR code">
+      <p class="small">{escape(page_url)}</p>
+    </section>
+  </main>
+</body>
+</html>
+"""
+
+
+def make_qr(payload: str) -> qrcode.QRCode:
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=16,
+        border=4,
+    )
+    qr.add_data(payload)
+    qr.make(fit=True)
+    return qr
+
+
+def write_qr_svg(payload: str, output_path: Path) -> None:
+    qr = make_qr(payload)
+    image = qr.make_image(image_factory=SvgPathImage)
+    output_path.write_text(image.to_string(encoding="unicode"), encoding="utf-8")
+
+
+def write_qr_png(payload: str, output_path: Path) -> None:
+    qr = make_qr(payload)
+    image = qr.make_image(fill_color="black", back_color="white")
+    image.save(output_path)
+
+
 def main() -> None:
     args = parse_args()
     root = Path(__file__).resolve().parents[1]
@@ -84,19 +205,25 @@ def main() -> None:
 
     (output_dir / "index.html").write_text(html, encoding="utf-8")
     (output_dir / "plain-text-qr-payload.txt").write_text(plain_text, encoding="utf-8")
-    (output_dir / "plain-text-qr.svg").write_text(make_svg(plain_text.strip(), label="Plain text payment QR code"), encoding="utf-8")
+    write_qr_svg(plain_text.strip(), output_dir / "plain-text-qr.svg")
+    write_qr_png(plain_text.strip(), output_dir / "plain-text-qr.png")
     (output_dir / ".nojekyll").write_text("", encoding="utf-8")
 
     print(f"Wrote {output_dir / 'index.html'}")
     print(f"Wrote {output_dir / 'plain-text-qr-payload.txt'}")
     print(f"Wrote {output_dir / 'plain-text-qr.svg'}")
+    print(f"Wrote {output_dir / 'plain-text-qr.png'}")
 
     if args.page_url:
         page_url = args.page_url.strip()
         (output_dir / "payment-page-url.txt").write_text(page_url + "\n", encoding="utf-8")
-        (output_dir / "payment-page-qr.svg").write_text(make_svg(page_url, label="Hosted payment page QR code"), encoding="utf-8")
+        write_qr_svg(page_url, output_dir / "payment-page-qr.svg")
+        write_qr_png(page_url, output_dir / "payment-page-qr.png")
+        (output_dir / "payment-page-print.html").write_text(render_print_sign(page_url), encoding="utf-8")
         print(f"Wrote {output_dir / 'payment-page-url.txt'}")
         print(f"Wrote {output_dir / 'payment-page-qr.svg'}")
+        print(f"Wrote {output_dir / 'payment-page-qr.png'}")
+        print(f"Wrote {output_dir / 'payment-page-print.html'}")
 
 
 if __name__ == "__main__":
